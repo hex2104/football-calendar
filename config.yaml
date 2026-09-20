@@ -1,0 +1,68 @@
+# ---------------------------------------------------------------------------
+# Which teams do you want in your calendar?
+#
+# Names are matched loosely against the club's full name, short name and
+# three-letter code, so "Arsenal", "arsenal fc" and "ARS" all work.
+#
+# Run `python list_teams.py` to print every club name the API recognises.
+#
+# Leave this list EMPTY to get every match in every competition below
+# (that's roughly 1,400 events a season — usually too many).
+# ---------------------------------------------------------------------------
+teams:
+  - Arsenal
+  - Chelsea
+  - Real Madrid
+  - Bayern          # NOT "Bayern Munich" - the API says "FC Bayern Munchen"
+
+# Clubs followed only inside specific competitions. These are added to the
+# list above for that competition alone, so PSG and Barcelona show up in the
+# Champions League without dragging in their domestic leagues.
+#
+# "FC Barcelona" is spelled out in full on purpose: a bare "Barcelona" would
+# also match RCD Espanyol de Barcelona, and their shared code FCB belongs to
+# Bayern too.
+teams_only_in:
+  CL:
+    - PSG
+    - FC Barcelona
+
+# Competitions to pull from. These four are on football-data.org's free tier.
+# Others you can add for free: SA (Serie A), FL1 (Ligue 1), DED (Eredivisie),
+# PPL (Primeira Liga), ELC (Championship), BSA (Brasileirao).
+competitions:
+  - PL    # Premier League
+  - PD    # La Liga
+  - BL1   # Bundesliga
+  - CL    # Champions League
+
+# "auto" picks the current season (Jul–Jun). Or pin a year, e.g. 2026.
+season: auto
+
+# ---------------------------------------------------------------------------
+# Calendar appearance
+# ---------------------------------------------------------------------------
+calendar_name: Football
+filename: football.ics
+timezone: Asia/Kolkata
+
+# Append a short competition tag to each title, e.g. "Arsenal 2–1 Chelsea [PL]"
+show_competition_tag: true
+
+# How long each event blocks out. 115 min ≈ kickoff to final whistle with a
+# normal stoppage-time allowance.
+event_duration_minutes: 115
+
+# Alert this many minutes before kickoff. Set to null for no alerts.
+reminder_minutes_before: 15
+
+# Hint to calendar clients about how often to re-fetch (minutes).
+refresh_minutes: 10
+
+# Also publish one .ics per competition alongside the merged feed.
+also_write_per_competition: true
+
+# Your GitHub Pages URL. Fill this in after your first deploy and the
+# generated index.html will carry ready-made webcal:// subscribe links.
+# e.g. https://yourname.github.io/football-calendar
+base_url: ""

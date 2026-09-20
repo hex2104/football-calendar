@@ -1,0 +1,65 @@
+name: Build football calendar
+
+on:
+  schedule:
+    # Every 10 minutes. GitHub runs scheduled jobs on a best-effort basis and
+    # often lags by a few minutes when the shared runners are busy.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "build_ics.py"
+      - "config.yaml"
+      - ".github/workflows/build.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let an in-flight build finish rather than piling up during a matchday.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - uses: actions/configure-pages@v5
+        id: pages
+
+      - name: Build the .ics feed
+        env:
+          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: python build_ics.py --config config.yaml --out public
+
+      - name: Sanity-check the output
+        run: |
+          test -s public/football.ics
+          python validate_ics.py public/football.ics
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

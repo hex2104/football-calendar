@@ -1,0 +1,103 @@
+{
+  "PL": [
+    {
+      "id": 500001,
+      "utcDate": "2026-09-19T14:00:00Z",
+      "status": "FINISHED",
+      "matchday": 5,
+      "stage": "REGULAR_SEASON",
+      "group": null,
+      "competition": {"name": "Premier League", "code": "PL"},
+      "homeTeam": {"id": 57, "name": "Arsenal FC", "shortName": "Arsenal", "tla": "ARS"},
+      "awayTeam": {"id": 61, "name": "Chelsea FC", "shortName": "Chelsea", "tla": "CHE"},
+      "score": {"winner": "HOME_TEAM", "duration": "REGULAR",
+                "fullTime": {"home": 2, "away": 1},
+                "halfTime": {"home": 1, "away": 1}},
+      "venue": "Emirates Stadium"
+    },
+    {
+      "id": 500002,
+      "utcDate": "2026-09-19T16:30:00Z",
+      "status": "IN_PLAY",
+      "minute": 34,
+      "matchday": 5,
+      "stage": "REGULAR_SEASON",
+      "competition": {"name": "Premier League", "code": "PL"},
+      "homeTeam": {"id": 64, "name": "Liverpool FC", "shortName": "Liverpool", "tla": "LIV"},
+      "awayTeam": {"id": 65, "name": "Manchester City FC", "shortName": "Man City", "tla": "MCI"},
+      "score": {"winner": null, "duration": "REGULAR",
+                "fullTime": {"home": 1, "away": 0},
+                "halfTime": {"home": null, "away": null}},
+      "venue": "Anfield"
+    },
+    {
+      "id": 500003,
+      "utcDate": "2026-09-26T11:30:00Z",
+      "status": "TIMED",
+      "matchday": 6,
+      "stage": "REGULAR_SEASON",
+      "competition": {"name": "Premier League", "code": "PL"},
+      "homeTeam": {"id": 73, "name": "Tottenham Hotspur FC", "shortName": "Tottenham", "tla": "TOT"},
+      "awayTeam": {"id": 57, "name": "Arsenal FC", "shortName": "Arsenal", "tla": "ARS"},
+      "score": {"winner": null, "duration": "REGULAR",
+                "fullTime": {"home": null, "away": null},
+                "halfTime": {"home": null, "away": null}}
+    },
+    {
+      "id": 500004,
+      "utcDate": "2026-09-27T13:00:00Z",
+      "status": "TIMED",
+      "matchday": 6,
+      "stage": "REGULAR_SEASON",
+      "competition": {"name": "Premier League", "code": "PL"},
+      "homeTeam": {"id": 402, "name": "Brentford FC", "shortName": "Brentford", "tla": "BRE"},
+      "awayTeam": {"id": 397, "name": "Brighton & Hove Albion FC", "shortName": "Brighton", "tla": "BHA"},
+      "score": {"winner": null, "duration": "REGULAR",
+                "fullTime": {"home": null, "away": null},
+                "halfTime": {"home": null, "away": null}}
+    }
+  ],
+  "CL": [
+    {
+      "id": 600001,
+      "utcDate": "2026-09-22T19:00:00Z",
+      "status": "PAUSED",
+      "stage": "LEAGUE_STAGE",
+      "matchday": 2,
+      "competition": {"name": "UEFA Champions League", "code": "CL"},
+      "homeTeam": {"id": 86, "name": "Real Madrid CF", "shortName": "Real Madrid", "tla": "RMA"},
+      "awayTeam": {"id": 5, "name": "FC Bayern München", "shortName": "Bayern Munich", "tla": "FCB"},
+      "score": {"winner": null, "duration": "REGULAR",
+                "fullTime": {"home": 2, "away": 2},
+                "halfTime": {"home": 2, "away": 2}},
+      "venue": "Estadio Santiago Bernabéu; Madrid, Spain"
+    },
+    {
+      "id": 600002,
+      "utcDate": "2026-10-01T19:00:00Z",
+      "status": "POSTPONED",
+      "stage": "LEAGUE_STAGE",
+      "matchday": 3,
+      "competition": {"name": "UEFA Champions League", "code": "CL"},
+      "homeTeam": {"id": 64, "name": "Liverpool FC", "shortName": "Liverpool", "tla": "LIV"},
+      "awayTeam": {"id": 524, "name": "Paris Saint-Germain FC", "shortName": "PSG", "tla": "PSG"},
+      "score": {"winner": null, "duration": "REGULAR",
+                "fullTime": {"home": null, "away": null},
+                "halfTime": {"home": null, "away": null}}
+    },
+    {
+      "id": 600003,
+      "utcDate": "2027-05-29T19:00:00Z",
+      "status": "FINISHED",
+      "stage": "FINAL",
+      "competition": {"name": "UEFA Champions League", "code": "CL"},
+      "homeTeam": {"id": 57, "name": "Arsenal FC", "shortName": "Arsenal", "tla": "ARS"},
+      "awayTeam": {"id": 86, "name": "Real Madrid CF", "shortName": "Real Madrid", "tla": "RMA"},
+      "score": {"winner": "AWAY_TEAM", "duration": "PENALTY_SHOOTOUT",
+                "fullTime": {"home": 1, "away": 1},
+                "halfTime": {"home": 0, "away": 1},
+                "penalties": {"home": 3, "away": 4}},
+      "venue": "Wembley Stadium"
+    }
+  ]
+}
