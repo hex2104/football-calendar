@@ -2,9 +2,13 @@ name: Build football calendar
 
 on:
   schedule:
-    # Every 10 minutes. GitHub runs scheduled jobs on a best-effort basis and
-    # often lags by a few minutes when the shared runners are busy.
-    - cron: "*/10 * * * *"
+    # Every 10 minutes, deliberately offset off the :00 boundary. GitHub's own
+    # docs say load peaks at the top of the hour and that queued scheduled jobs
+    # may be dropped entirely when it is high, so */10 (which lands on :00)
+    # is the worst possible phase. This is still best-effort: treat it as
+    # "eligible every 10 minutes", never as a timer. The reliable trigger is
+    # an external scheduler calling workflow_dispatch.
+    - cron: "4,14,24,34,44,54 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
