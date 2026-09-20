@@ -65,4 +65,4 @@ also_write_per_competition: true
 # Your GitHub Pages URL. Fill this in after your first deploy and the
 # generated index.html will carry ready-made webcal:// subscribe links.
 # e.g. https://yourname.github.io/football-calendar
-base_url: ""
+base_url: "https://hex2104.github.io/football-calendar"
