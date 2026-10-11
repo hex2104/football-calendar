@@ -49,6 +49,18 @@ timezone: Asia/Kolkata
 # Append a short competition tag to each title, e.g. "Arsenal 2–1 Chelsea [PL]"
 show_competition_tag: true
 
+# A colour dot shown beside each club's name, e.g. "🔴 Arsenal 2–1 Chelsea 🔵".
+# Names match loosely, like the teams list above. Any club can have one,
+# including opponents; clubs not listed get no dot. Available dots:
+# 🔴 🟠 🟡 🟢 🔵 🟣 🟤 ⚫ ⚪
+team_badges:
+  Arsenal: 🔴
+  Chelsea: 🔵
+  Real Madrid: ⚪
+  Bayern: 🔴
+  PSG: 🔵
+  FC Barcelona: 🔵
+
 # How long each event blocks out. 115 min ≈ kickoff to final whistle with a
 # normal stoppage-time allowance.
 event_duration_minutes: 115

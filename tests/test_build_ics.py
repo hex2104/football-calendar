@@ -87,6 +87,16 @@ class Events(unittest.TestCase):
         self.assertNotIn("BEGIN:VALARM", event)
         self.assertEqual(props(event)["SUMMARY"], "Arsenal v Chelsea · TBC [PL]")
 
+    def test_badges_sit_outside_the_names(self):
+        cfg = dict(CFG, team_badges={"Arsenal": "🔴", "Chelsea": "🔵"})
+        event = b.build_event(match("FINISHED", 2, 1), "PL", cfg, "20261011T000000Z")
+        self.assertEqual(props(event)["SUMMARY"], "🔴 Arsenal 2–1 Chelsea 🔵 · FT [PL]")
+
+    def test_clubs_without_a_badge_get_none(self):
+        cfg = dict(CFG, team_badges={"Chelsea": "🔵", "Liverpool": "🔴"})
+        event = b.build_event(match(), "PL", cfg, "20261011T000000Z")
+        self.assertEqual(props(event)["SUMMARY"], "Arsenal v Chelsea 🔵 [PL]")
+
     def test_postponed_is_tentative(self):
         event = b.build_event(match("POSTPONED"), "PL", CFG, "20261011T000000Z")
         self.assertIn("STATUS:TENTATIVE", event)

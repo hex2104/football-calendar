@@ -5,11 +5,11 @@ La Liga, Bundesliga and Champions League — with the score in the event title a
 the match plays out.
 
 ```
-Brentford v Arsenal · TBC [PL]           ← kickoff time not confirmed yet
-Tottenham v Arsenal [PL]                 ← before kickoff
+Brentford v Arsenal 🔴 · TBC [PL]        ← kickoff time not confirmed yet
+Tottenham v Arsenal 🔴 [PL]              ← before kickoff
 Liverpool 1–0 Man City · LIVE 34' [PL]   ← in play
-Real Madrid 2–2 Bayern Munich · HT [UCL] ← half time
-Arsenal 2–1 Chelsea · FT [PL]            ← full time
+⚪ Real Madrid 2–2 Bayern 🔴 · HT [UCL]   ← half time
+🔴 Arsenal 2–1 Chelsea 🔵 · FT [PL]      ← full time
 ```
 
 A GitHub Actions job rebuilds the feed and publishes it to GitHub Pages, and
@@ -68,6 +68,10 @@ teams:
   - Bayern        # the API calls them "FC Bayern München", so not "Bayern Munich"
   - Liverpool
 ```
+
+To put a colour dot beside a club's name in event titles, map it under
+`team_badges` (`Arsenal: 🔴`). Calendar apps can't show real club crests in
+a subscribed feed, so emoji are the closest you can get.
 
 Each build prints a warning for any name that matches no club, or more than
 one (a bare `Barcelona` also matches Espanyol). Check the build log after

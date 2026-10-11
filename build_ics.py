@@ -105,7 +105,7 @@ def load_config(path: str) -> dict:
         import yaml
     except ImportError:  # pragma: no cover
         sys.exit("PyYAML is required:  pip install pyyaml")
-    return yaml.safe_load(pathlib.Path(path).read_text()) or {}
+    return yaml.safe_load(pathlib.Path(path).read_text(encoding="utf-8")) or {}
 
 
 # --------------------------------------------------------------------------
@@ -298,6 +298,15 @@ def watchlist_report(by_competition: dict[str, list[dict]], watchlist: set[str],
     return warnings
 
 
+def team_badge(team: dict, cfg: dict) -> str:
+    """The configured colour dot for a team, matched like the watchlist."""
+    for want, badge in (cfg.get("team_badges") or {}).items():
+        want, badge = str(want).strip().lower(), str(badge or "").strip()
+        if want and badge and team_matches(team, want):
+            return badge
+    return ""
+
+
 def display_name(team: dict) -> str:
     return (team.get("shortName") or team.get("name")
             or team.get("tla") or "TBD")
@@ -335,8 +344,15 @@ def live_label(match: dict) -> str:
 
 
 def build_summary(match: dict, code: str, cfg: dict) -> str:
-    home = display_name(match.get("homeTeam") or {})
-    away = display_name(match.get("awayTeam") or {})
+    home_team = match.get("homeTeam") or {}
+    away_team = match.get("awayTeam") or {}
+    home, away = display_name(home_team), display_name(away_team)
+    # Badges sit on the outside, e.g. "🔴 Arsenal 2–1 Chelsea 🔵"
+    home_badge, away_badge = team_badge(home_team, cfg), team_badge(away_team, cfg)
+    if home_badge:
+        home = f"{home_badge} {home}"
+    if away_badge:
+        away = f"{away} {away_badge}"
     tag = COMPETITION_TAGS.get(code, code)
     status = match.get("status")
     hs, as_ = score_pair(match)
