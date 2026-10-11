@@ -101,7 +101,8 @@ https://<your-username>.github.io/football-calendar/football.ics
 Per-competition feeds sit alongside it: `premier-league.ics`, `la-liga.ics`,
 `bundesliga.ics`, `champions-league.ics`. Each configured competition always
 gets a file, even when none of your teams play in it, so a subscription never
-breaks. `status.json` records when the feed was last built.
+breaks. `status.json` records when the feed was last built, and
+`venues.json` caches each club's home ground.
 
 Optionally put that base URL into `config.yaml` as `base_url` and push — the
 next build generates an `index.html` with one-click `webcal://` links.
@@ -163,6 +164,13 @@ change the cron in `.github/workflows/build.yml` to something gentler like
 **Scheduled workflows get switched off after 60 days of repository
 inactivity.** `keepalive.yml` re-enables them every week, so you don't need to
 push commits to keep them running.
+
+**Venues are the home club's ground.** The free tier leaves the venue out of
+match data, so each event's location is the home team's stadium, taken from
+the API's team list. It's cached in `venues.json` and refreshed weekly, so
+normal builds make no extra API calls. Finals are left blank because they're
+played at neutral grounds. A match moved to a temporary ground will still show
+the club's usual stadium.
 
 **Unconfirmed kickoff times are marked tentative.** Leagues publish dates long
 before TV picks fix the kickoff times. Until then the event is `TENTATIVE`,

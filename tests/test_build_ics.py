@@ -140,6 +140,61 @@ class Sequence(unittest.TestCase):
         self.assertEqual(int(props(new)["SEQUENCE"]), 10 ** 9 + 1)
 
 
+class Venues(unittest.TestCase):
+    CFG = {"season": 2026, "competitions": ["PL", "CL"]}
+
+    def cache(self, age_days, teams=None):
+        fetched = b.dt.datetime.now(b.dt.timezone.utc) - b.dt.timedelta(days=age_days)
+        return json.dumps({"season": 2026, "fetched_at": fetched.isoformat(),
+                           "teams": teams or {"57": "Emirates Stadium"}})
+
+    def test_home_ground_fills_missing_venue(self):
+        games = {"PL": [match(), match(mid=2, venue="Wembley Stadium"),
+                        match(mid=3, stage="FINAL"),
+                        match(mid=4, homeTeam={"id": 999, "name": "Nobody FC"})]}
+        filled = b.fill_venues(games, {"teams": {"57": "Emirates Stadium"}})
+        self.assertEqual(filled, 1)
+        self.assertEqual([m.get("venue") for m in games["PL"]],
+                         ["Emirates Stadium", "Wembley Stadium", None, None])
+
+    def test_venue_reaches_location_and_notes(self):
+        games = {"PL": [match()]}
+        b.fill_venues(games, {"teams": {"57": "Emirates Stadium"}})
+        event = props(b.build_event(games["PL"][0], "PL", CFG, "20261011T000000Z"))
+        self.assertEqual(event["LOCATION"], "Emirates Stadium")
+        self.assertIn("Venue: Emirates Stadium", event["DESCRIPTION"])
+
+    def test_fresh_cache_is_reused_without_api_calls(self):
+        with mock.patch.object(b, "api_get") as api:
+            venues = b.load_venues(self.CFG, "t", None, self.cache(2))
+        api.assert_not_called()
+        self.assertEqual(venues["teams"], {"57": "Emirates Stadium"})
+
+    def test_stale_cache_is_refreshed(self):
+        reply = {"teams": [{"id": 86, "venue": "Estadio Santiago Bernabéu"}]}
+        with mock.patch.object(b, "api_get", return_value=reply) as api, \
+                mock.patch("time.sleep"), contextlib.redirect_stdout(io.StringIO()):
+            venues = b.load_venues(self.CFG, "t", None, self.cache(8))
+        self.assertEqual(api.call_count, 2)
+        self.assertEqual(venues["teams"]["86"], "Estadio Santiago Bernabéu")
+        self.assertEqual(venues["teams"]["57"], "Emirates Stadium")
+
+    def test_failed_refresh_keeps_old_venues_and_retries_next_build(self):
+        old = self.cache(8)
+        with mock.patch.object(b, "api_get", side_effect=b.ApiError("down")), \
+                mock.patch("time.sleep"), contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            venues = b.load_venues(self.CFG, "t", None, old)
+        self.assertEqual(venues["teams"], {"57": "Emirates Stadium"})
+        self.assertEqual(venues["fetched_at"], json.loads(old)["fetched_at"])
+
+    def test_last_seasons_venues_are_dropped(self):
+        old = json.dumps({"season": 2025, "fetched_at": "2026-10-10T00:00:00+00:00",
+                          "teams": {"57": "Highbury"}})
+        venues = b.load_venues(self.CFG, "t", "offline.json", old)
+        self.assertEqual(venues["teams"], {})
+
+
 class ShrinkGuard(unittest.TestCase):
     def test_sharp_drop_in_same_season_is_flagged(self):
         prev = {"season": 2026, "competitions": {"PL": {"fetched": 380}, "CL": {"fetched": 189}}}

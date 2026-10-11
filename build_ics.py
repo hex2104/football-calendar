@@ -91,6 +91,14 @@ STATUS_RANK = {
 # (e.g. awaiting TV picks); a POSTPONED match's slot is no longer happening.
 TENTATIVE_STATUSES = ("SCHEDULED", "POSTPONED")
 
+# The free tier leaves venue out of match data, so venues come from each
+# club's home ground (the teams endpoint). Stadiums rarely change, so the
+# lookup is published as venues.json and only refreshed this often.
+VENUES_MAX_AGE = dt.timedelta(days=7)
+
+# Stages played at a neutral ground, where the home club's stadium is wrong.
+NEUTRAL_STAGES = ("FINAL",)
+
 # SEQUENCE carries a day counter so it still advances if a match is rescheduled
 # without its status or scoreline changing.
 SEQUENCE_EPOCH = dt.date(2020, 1, 1)
@@ -614,6 +622,65 @@ def load_matches(cfg: dict, token: str, offline: str | None) -> dict[str, list[d
     return result
 
 
+def load_venues(cfg: dict, token: str, offline: str | None,
+                previous_raw: str | None) -> dict:
+    """
+    Home ground per team id, as published in venues.json.
+
+    Reuses the previous build's lookup while it is fresh, and never fails the
+    build: venues are a nice-to-have, the fixtures are not.
+    """
+    season = season_for(cfg)
+    previous: dict = {}
+    if previous_raw:
+        try:
+            previous = json.loads(previous_raw)
+        except ValueError:
+            print("  previous venues.json is not valid JSON, ignoring", file=sys.stderr)
+    teams = dict(previous.get("teams") or {}) if previous.get("season") == season else {}
+
+    fetched_at = previous.get("fetched_at")
+    if teams and fetched_at:
+        age = dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(fetched_at)
+        if age < VENUES_MAX_AGE:
+            return {"season": season, "fetched_at": fetched_at, "teams": teams}
+    if offline:
+        return {"season": season, "fetched_at": fetched_at, "teams": teams}
+
+    complete = True
+    for code in cfg.get("competitions", []):
+        time.sleep(7)  # follows the match requests; stay inside 10/minute
+        print(f"fetching {code} home grounds")
+        try:
+            data = api_get(f"/competitions/{code}/teams?season={season}", token)
+        except ApiError as err:
+            print(f"  warning: no venues for {code} ({err})", file=sys.stderr)
+            complete = False
+            continue
+        for team in data.get("teams") or []:
+            if team.get("id") and team.get("venue"):
+                teams[str(team["id"])] = team["venue"]
+    if complete:
+        fetched_at = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    # If any competition failed, keep the old fetched_at so the next build retries.
+    return {"season": season, "fetched_at": fetched_at, "teams": teams}
+
+
+def fill_venues(by_competition: dict[str, list[dict]], venues: dict) -> int:
+    """Give each match without a venue its home club's ground. Returns how many."""
+    grounds = venues.get("teams") or {}
+    filled = 0
+    for matches in by_competition.values():
+        for match in matches:
+            if match.get("venue") or match.get("stage") in NEUTRAL_STAGES:
+                continue
+            ground = grounds.get(str((match.get("homeTeam") or {}).get("id")))
+            if ground:
+                match["venue"] = ground
+                filled += 1
+    return filled
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config.yaml")
@@ -686,6 +753,9 @@ def main() -> int:
         for warning in watchlist_report(by_competition, watchlist, only_in):
             print(f"warning: {warning}", file=sys.stderr)
 
+    venues = load_venues(cfg, token, args.offline, read_previous(previous_at, "venues.json"))
+    print(f"venues: {fill_venues(by_competition, venues)} match(es) given their home ground")
+
     main_file = cfg.get("filename", "football.ics")
     previous = parse_events(read_previous(previous_at, main_file) or "")
     if previous_at:
@@ -751,6 +821,9 @@ def main() -> int:
                          for code in by_competition},
     }
     (outdir / "status.json").write_text(json.dumps(status, indent=2) + "\n", encoding="utf-8")
+    # Republished every build: a Pages deploy replaces the whole site.
+    (outdir / "venues.json").write_text(
+        json.dumps(venues, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
 
     (outdir / ".nojekyll").write_text("", encoding="utf-8")
     return 0
