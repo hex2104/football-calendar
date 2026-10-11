@@ -8,13 +8,10 @@ Use the output to fill in the `teams:` list in config.yaml.
 """
 
 import os
-import pathlib
 import sys
 import time
 
-import yaml
-
-from build_ics import API_BASE, COMPETITION_NAMES, api_get, season_for  # noqa: F401
+from build_ics import COMPETITION_NAMES, ApiError, api_get, load_config, season_for
 
 
 def main() -> int:
@@ -23,20 +20,25 @@ def main() -> int:
         sys.exit("FOOTBALL_DATA_TOKEN is not set. Free key: "
                  "https://www.football-data.org/client/register")
 
-    cfg = yaml.safe_load(pathlib.Path("config.yaml").read_text()) or {}
+    cfg = load_config("config.yaml")
     season = season_for(cfg)
 
-    for code in cfg.get("competitions", []):
+    for i, code in enumerate(cfg.get("competitions", [])):
+        if i:
+            time.sleep(7)  # free tier allows 10 requests/minute
         label = COMPETITION_NAMES.get(code, code)
         print(f"\n=== {label} ({code}) — {season}/{str(season + 1)[-2:]} ===")
-        data = api_get(f"/competitions/{code}/teams?season={season}", token)
+        try:
+            data = api_get(f"/competitions/{code}/teams?season={season}", token)
+        except ApiError as err:
+            print(f"  (no data — {err})")
+            continue
         teams = sorted(data.get("teams", []), key=lambda t: t.get("name", ""))
         if not teams:
-            print("  (no data — competition may not be on your plan)")
+            print("  (no teams listed for this season yet)")
         for team in teams:
             print(f"  {team.get('tla', '   '):<4} {team.get('shortName', ''):<22} "
                   f"{team.get('name', '')}")
-        time.sleep(7)  # free tier allows 10 requests/minute
     return 0
 
 

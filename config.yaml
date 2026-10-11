@@ -53,7 +53,11 @@ show_competition_tag: true
 # normal stoppage-time allowance.
 event_duration_minutes: 115
 
+# Added to the above when a match goes to extra time or penalties.
+extra_time_minutes: 35
+
 # Alert this many minutes before kickoff. Set to null for no alerts.
+# Only matches with a confirmed kickoff time get an alert.
 reminder_minutes_before: 15
 
 # Hint to calendar clients about how often to re-fetch (minutes).

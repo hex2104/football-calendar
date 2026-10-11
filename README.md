@@ -5,15 +5,17 @@ La Liga, Bundesliga and Champions League — with the score in the event title a
 the match plays out.
 
 ```
+Brentford v Arsenal · TBC [PL]           ← kickoff time not confirmed yet
 Tottenham v Arsenal [PL]                 ← before kickoff
 Liverpool 1–0 Man City · LIVE 34' [PL]   ← in play
 Real Madrid 2–2 Bayern Munich · HT [UCL] ← half time
 Arsenal 2–1 Chelsea · FT [PL]            ← full time
 ```
 
-A GitHub Actions job rebuilds the feed every 10 minutes and publishes it to
-GitHub Pages. Apple Calendar subscribes to that URL. Nothing runs on your Mac,
-and it costs nothing.
+A GitHub Actions job rebuilds the feed and publishes it to GitHub Pages, and
+Apple Calendar subscribes to that URL. It costs nothing. GitHub's own cron is
+unreliable, so for timely scores you'll also want an external trigger (see
+[Triggering builds reliably](#triggering-builds-reliably)).
 
 ---
 
@@ -24,7 +26,7 @@ and it costs nothing.
 Register at **https://www.football-data.org/client/register**. The key arrives
 by email. The free tier covers the four competitions above (plus Serie A,
 Ligue 1, Eredivisie, Primeira Liga, Championship and Brasileirão) at 10
-requests per minute — this project uses 4 per run.
+requests per minute. This project uses 4 per run.
 
 ### 2. Create the repository
 
@@ -38,7 +40,9 @@ gh repo create football-calendar --public --source=. --push
 A **public** repo keeps GitHub Actions free and unlimited. The feed contains
 nothing secret — your API key lives in an encrypted secret, not in the code.
 If you'd rather keep it private, note that private repos have a monthly
-Actions minutes allowance that a 10-minute cron will burn through.
+Actions minutes allowance that a 10-minute cron will burn through. The build
+also reads the currently published feed back from Pages, so the Pages site
+must be reachable.
 
 ### 3. Add your API key as a secret
 
@@ -61,9 +65,13 @@ name and three-letter code, so `Arsenal`, `arsenal fc` and `ARS` all work.
 teams:
   - Arsenal
   - Real Madrid
-  - Bayern Munich
+  - Bayern        # the API calls them "FC Bayern München", so not "Bayern Munich"
   - Liverpool
 ```
+
+Each build prints a warning for any name that matches no club, or more than
+one (a bare `Barcelona` also matches Espanyol). Check the build log after
+changing the list.
 
 To see exactly what the API calls each club:
 
@@ -87,7 +95,9 @@ https://<your-username>.github.io/football-calendar/football.ics
 ```
 
 Per-competition feeds sit alongside it: `premier-league.ics`, `la-liga.ics`,
-`bundesliga.ics`, `champions-league.ics`.
+`bundesliga.ics`, `champions-league.ics`. Each configured competition always
+gets a file, even when none of your teams play in it, so a subscription never
+breaks. `status.json` records when the feed was last built.
 
 Optionally put that base URL into `config.yaml` as `base_url` and push — the
 next build generates an `index.html` with one-click `webcal://` links.
@@ -123,7 +133,7 @@ This is the honest limitation, and it's Apple's, not this project's.
 | Step | Typical delay |
 |---|---|
 | Goal scored → football-data.org | seconds to a minute |
-| API → your feed rebuilt | up to 10 min (the cron interval) |
+| API → your feed rebuilt | up to 10 min with a reliable trigger; GitHub's cron alone can be much slower |
 | Feed → Apple Calendar on macOS | 5 min, if you set auto-refresh to 5 min |
 | Feed → Apple Calendar on iPhone | **roughly hourly** — not user-configurable |
 
@@ -140,20 +150,20 @@ that and use this for everything else.
 
 If you only care about final scores, set `reminder_minutes_before: null` and
 change the cron in `.github/workflows/build.yml` to something gentler like
-`"*/30 * * * *"`.
+`"4,34 * * * *"`.
 
 ---
 
 ## Things worth knowing
 
-**GitHub's cron is best-effort.** `*/10 * * * *` is a request, not a promise;
-runs often lag by a few minutes when the shared runners are busy, and GitHub
-drops runs entirely under heavy load. Anything under 5 minutes is ignored.
-
 **Scheduled workflows get switched off after 60 days of repository
-inactivity.** GitHub emails you first. Pushing any commit re-enables it. If you
-want to avoid thinking about it, push a trivial commit every couple of months,
-or run the workflow manually from the Actions tab.
+inactivity.** `keepalive.yml` re-enables them every week, so you don't need to
+push commits to keep them running.
+
+**Unconfirmed kickoff times are marked tentative.** Leagues publish dates long
+before TV picks fix the kickoff times. Until then the event is `TENTATIVE`,
+gets "TBC" in its title and has no alert, because the time is a placeholder.
+Postponed matches are also tentative.
 
 **Free tier score latency.** football-data.org's free plan updates live matches,
 but not always as fast as a paid commercial feed. Combined with the polling
@@ -161,6 +171,29 @@ above, treat in-play scores as approximate and full-time scores as reliable.
 
 **Season rollover** is automatic: `season: auto` switches to the new season
 each July. Pin a year if you want a fixed one.
+
+**A failed fetch never wipes your calendar.** If the API errors, or a
+competition suddenly returns less than half the matches it did in the previous
+build of the same season, the build fails and the last good feed stays live.
+If the drop is expected, run the workflow manually with **allow_shrink** ticked.
+
+---
+
+## Triggering builds reliably
+
+GitHub's cron is best-effort. The 10-minute schedule in `build.yml` is a
+request, not a promise: runs often lag when the shared runners are busy, and
+GitHub drops queued runs entirely under heavy load. In practice it can go an
+hour or more without firing.
+
+For timely updates, run an external scheduler that calls
+`gh workflow run build.yml` (a `workflow_dispatch`). Any always-on machine
+works, e.g. a launchd agent on a Mac or a cron job on a server. The repo cron
+then stays as a fallback.
+
+`freshness.yml` checks `status.json` every hour. If the last build is more than
+3 hours old, it starts a build and fails, so GitHub emails you. If you get that
+email, check your external trigger first.
 
 ---
 
@@ -171,17 +204,24 @@ each July. Pin a year if you want a fixed one.
 | `build_ics.py` | Fetches matches, filters to your teams, writes the `.ics` files |
 | `config.yaml` | Your teams, competitions and calendar preferences |
 | `list_teams.py` | Prints every club name the API recognises |
-| `validate_ics.py` | RFC 5545 sanity checks (line folding, CRLF, UIDs) |
+| `validate_ics.py` | RFC 5545 sanity checks (line folding, CRLF, UIDs, STATUS) |
 | `sample_payload.json` | Fake match data for offline testing |
+| `tests/` | Unit tests (standard library only) |
 | `.github/workflows/build.yml` | The 10-minute rebuild + Pages deploy |
+| `.github/workflows/test.yml` | Tests and an offline build on Python 3.9 and 3.12 |
+| `.github/workflows/freshness.yml` | Hourly check that the feed isn't stale |
+| `.github/workflows/keepalive.yml` | Stops GitHub disabling the schedules |
 
 ## Testing locally without an API key
 
 ```bash
 pip install -r requirements.txt
+python -m unittest discover -s tests
 python build_ics.py --offline sample_payload.json --out /tmp/out
-python validate_ics.py /tmp/out/football.ics
+python validate_ics.py /tmp/out/*.ics
 ```
+
+The code targets Python 3.9 and later. CI runs it on both 3.9 and 3.12.
 
 ---
 
@@ -191,18 +231,24 @@ python validate_ics.py /tmp/out/football.ics
 match is rescheduled or the score changes, Apple updates the *existing* event
 instead of creating a duplicate.
 
+**Only changed events change.** Each event carries a hash of its content
+(`X-FOOTBALL-CALENDAR-HASH`). Each build fetches the currently published feed.
+An event whose hash hasn't changed is republished exactly as before, with the
+same `SEQUENCE` and `DTSTAMP`, so calendar clients don't resync events nobody
+touched. Event descriptions deliberately contain no build timestamp.
+
 **Monotonic SEQUENCE.** Calendar clients take an updated event more seriously
-when its `SEQUENCE` grows. It's derived from status rank, goals scored and a
-day counter, so it only ever climbs across a match's lifecycle:
+when its `SEQUENCE` grows. For a changed event, the baseline is derived from
+status rank, goals scored and a day counter:
 
 ```
 TIMED 2453000 → IN_PLAY 0-0 2453300 → 1-0 2453301 → HT 2453301
       → 1-1 2453302 → FT 2-1 2453503
 ```
 
-`PAUSED` deliberately shares a rank with `IN_PLAY` so half time doesn't
-outrank the second half, and `POSTPONED` shares a rank with `TIMED` so a
-rescheduled match doesn't regress.
+The new value is also always at least one more than the previously published
+`SEQUENCE`. That covers the cases the formula can't, like a goal ruled out by
+VAR.
 
 **Line folding.** Long `DESCRIPTION` values are folded at 75 *octets* on UTF-8
 character boundaries, which matters for venue names like *Estadio Santiago

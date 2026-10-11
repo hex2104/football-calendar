@@ -7,19 +7,7 @@
 import pathlib
 import sys
 
-
-def unfold(raw: str) -> list[str]:
-    lines, buffer = [], ""
-    for line in raw.split("\r\n"):
-        if line.startswith(" "):
-            buffer += line[1:]
-        else:
-            if buffer:
-                lines.append(buffer)
-            buffer = line
-    if buffer:
-        lines.append(buffer)
-    return lines
+from build_ics import unfold
 
 
 def check(path: str) -> int:
@@ -58,6 +46,8 @@ def check(path: str) -> int:
             uids.append(current.get("UID"))
             if "SEQUENCE" in current and not current["SEQUENCE"].isdigit():
                 problems.append(f"event {events} has a non-numeric SEQUENCE")
+            if current.get("STATUS", "CONFIRMED") not in ("CONFIRMED", "TENTATIVE", "CANCELLED"):
+                problems.append(f"event {events} has STATUS {current['STATUS']!r}")
         elif depth > 0 and ":" in line:
             key, value = line.split(":", 1)
             current[key.split(";")[0]] = value

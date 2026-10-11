@@ -1,0 +1,50 @@
+name: Check feed freshness
+
+# Builds are normally triggered from outside GitHub, and that trigger can stop
+# without anything in the repo looking wrong. This reads the published
+# status.json every hour; if the last build is too old it starts a build and
+# fails, so GitHub emails a notification.
+
+on:
+  schedule:
+    - cron: "37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  pages: read
+
+env:
+  MAX_AGE_HOURS: "3"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the last build time
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          base=$(gh api "repos/${{ github.repository }}/pages" --jq .html_url)
+          python3 - "$base" <<'PY'
+          import datetime as dt, json, os, sys, time, urllib.request
+          url = f"{sys.argv[1].rstrip('/')}/status.json?nocache={int(time.time())}"
+          try:
+              with urllib.request.urlopen(url, timeout=30) as resp:
+                  built = dt.datetime.fromisoformat(json.load(resp)["built_at"])
+          except Exception as err:
+              sys.exit(f"could not read {url}: {err}")
+          hours = (dt.datetime.now(dt.timezone.utc) - built).total_seconds() / 3600
+          limit = float(os.environ["MAX_AGE_HOURS"])
+          print(f"last build {built.isoformat()} ({hours:.1f} h ago, limit {limit:g} h)")
+          sys.exit(1 if hours > limit else 0)
+          PY
+
+      - name: Stale - start a build
+        if: failure() && steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run build.yml --repo "${{ github.repository }}"
+          echo "::error::Feed was stale; started a build. Check the external trigger."

@@ -10,11 +10,19 @@ on:
     # an external scheduler calling workflow_dispatch.
     - cron: "4,14,24,34,44,54 * * * *"
   workflow_dispatch:
+    inputs:
+      allow_shrink:
+        description: "Publish even if a competition returned far fewer matches than last build"
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
       - "build_ics.py"
       - "config.yaml"
+      - "validate_ics.py"
+      - "requirements.txt"
+      - "tests/**"
       - ".github/workflows/build.yml"
 
 permissions:
@@ -40,6 +48,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+
       - uses: actions/configure-pages@v5
         id: pages
 
@@ -47,12 +58,13 @@ jobs:
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
           PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
+          ALLOW_SHRINK: ${{ inputs.allow_shrink && '1' || '' }}
         run: python build_ics.py --config config.yaml --out public
 
       - name: Sanity-check the output
         run: |
           test -s public/football.ics
-          python validate_ics.py public/football.ics
+          python validate_ics.py public/*.ics
 
       - uses: actions/upload-pages-artifact@v3
         with:
