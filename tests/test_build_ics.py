@@ -140,59 +140,90 @@ class Sequence(unittest.TestCase):
         self.assertEqual(int(props(new)["SEQUENCE"]), 10 ** 9 + 1)
 
 
-class Venues(unittest.TestCase):
+class Clubs(unittest.TestCase):
     CFG = {"season": 2026, "competitions": ["PL", "CL"]}
+    ARSENAL = {"venue": "Emirates Stadium", "clubColors": "Red / White"}
 
     def cache(self, age_days, teams=None):
         fetched = b.dt.datetime.now(b.dt.timezone.utc) - b.dt.timedelta(days=age_days)
         return json.dumps({"season": 2026, "fetched_at": fetched.isoformat(),
-                           "teams": teams or {"57": "Emirates Stadium"}})
+                           "teams": teams or {"57": self.ARSENAL}})
 
     def test_home_ground_fills_missing_venue(self):
         games = {"PL": [match(), match(mid=2, venue="Wembley Stadium"),
                         match(mid=3, stage="FINAL"),
                         match(mid=4, homeTeam={"id": 999, "name": "Nobody FC"})]}
-        filled = b.fill_venues(games, {"teams": {"57": "Emirates Stadium"}})
+        filled, colourless = b.apply_clubs(games, {"teams": {"57": self.ARSENAL}})
         self.assertEqual(filled, 1)
+        self.assertEqual(colourless, 2)  # Chelsea and Nobody FC
         self.assertEqual([m.get("venue") for m in games["PL"]],
                          ["Emirates Stadium", "Wembley Stadium", None, None])
 
-    def test_venue_reaches_location_and_notes(self):
+    def test_venue_and_colours_reach_the_event(self):
         games = {"PL": [match()]}
-        b.fill_venues(games, {"teams": {"57": "Emirates Stadium"}})
+        b.apply_clubs(games, {"teams": {"57": self.ARSENAL,
+                                        "61": {"clubColors": "Royal Blue / White"}}})
         event = props(b.build_event(games["PL"][0], "PL", CFG, "20261011T000000Z"))
         self.assertEqual(event["LOCATION"], "Emirates Stadium")
         self.assertIn("Venue: Emirates Stadium", event["DESCRIPTION"])
+        self.assertEqual(event["SUMMARY"], "🔴 Arsenal v Chelsea 🔵 [PL]")
 
     def test_fresh_cache_is_reused_without_api_calls(self):
         with mock.patch.object(b, "api_get") as api:
-            venues = b.load_venues(self.CFG, "t", None, self.cache(2))
+            clubs = b.load_clubs(self.CFG, "t", None, self.cache(2))
         api.assert_not_called()
-        self.assertEqual(venues["teams"], {"57": "Emirates Stadium"})
+        self.assertEqual(clubs["teams"], {"57": self.ARSENAL})
 
     def test_stale_cache_is_refreshed(self):
-        reply = {"teams": [{"id": 86, "venue": "Estadio Santiago Bernabéu"}]}
+        reply = {"teams": [{"id": 86, "venue": "Estadio Santiago Bernabéu",
+                            "clubColors": "White / Purple"}]}
         with mock.patch.object(b, "api_get", return_value=reply) as api, \
                 mock.patch("time.sleep"), contextlib.redirect_stdout(io.StringIO()):
-            venues = b.load_venues(self.CFG, "t", None, self.cache(8))
+            clubs = b.load_clubs(self.CFG, "t", None, self.cache(8))
         self.assertEqual(api.call_count, 2)
-        self.assertEqual(venues["teams"]["86"], "Estadio Santiago Bernabéu")
-        self.assertEqual(venues["teams"]["57"], "Emirates Stadium")
+        self.assertEqual(clubs["teams"]["86"]["venue"], "Estadio Santiago Bernabéu")
+        self.assertEqual(clubs["teams"]["57"], self.ARSENAL)
 
-    def test_failed_refresh_keeps_old_venues_and_retries_next_build(self):
+    def test_failed_refresh_keeps_old_details_and_retries_next_build(self):
         old = self.cache(8)
         with mock.patch.object(b, "api_get", side_effect=b.ApiError("down")), \
                 mock.patch("time.sleep"), contextlib.redirect_stdout(io.StringIO()), \
                 contextlib.redirect_stderr(io.StringIO()):
-            venues = b.load_venues(self.CFG, "t", None, old)
-        self.assertEqual(venues["teams"], {"57": "Emirates Stadium"})
-        self.assertEqual(venues["fetched_at"], json.loads(old)["fetched_at"])
+            clubs = b.load_clubs(self.CFG, "t", None, old)
+        self.assertEqual(clubs["teams"], {"57": self.ARSENAL})
+        self.assertEqual(clubs["fetched_at"], json.loads(old)["fetched_at"])
 
-    def test_last_seasons_venues_are_dropped(self):
+    def test_last_seasons_details_are_dropped(self):
         old = json.dumps({"season": 2025, "fetched_at": "2026-10-10T00:00:00+00:00",
-                          "teams": {"57": "Highbury"}})
-        venues = b.load_venues(self.CFG, "t", "offline.json", old)
-        self.assertEqual(venues["teams"], {})
+                          "teams": {"57": {"venue": "Highbury"}}})
+        clubs = b.load_clubs(self.CFG, "t", "offline.json", old)
+        self.assertEqual(clubs["teams"], {})
+
+
+class ColourDots(unittest.TestCase):
+    def test_first_recognisable_colour_wins(self):
+        cases = {
+            "Red / White": "🔴",
+            "Royal Blue / White": "🔵",
+            "Claret / Sky Blue": "🟣",
+            "White / Black": "⚪",
+            "Black / White": "⚫",
+            "Yellow / Black": "🟡",
+            "Orange / White": "🟠",
+            "Green / White": "🟢",
+            "Navy Blue / Gold": "🔵",
+            "Tartan / Red": "🔴",  # unknown first colour falls through
+            "": "",
+            None: "",
+        }
+        for colours, dot in cases.items():
+            self.assertEqual(b.colour_dot(colours), dot, colours)
+
+    def test_config_overrides_automatic_colour(self):
+        team = {"name": "FC Bayern München", "shortName": "Bayern", "clubColors": "White / Red"}
+        self.assertEqual(b.team_badge(team, {}), "⚪")
+        self.assertEqual(b.team_badge(team, {"team_badges": {"Bayern": "🔴"}}), "🔴")
+        self.assertEqual(b.team_badge(team, {"auto_badges": False}), "")
 
 
 class ShrinkGuard(unittest.TestCase):

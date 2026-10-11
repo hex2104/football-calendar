@@ -49,10 +49,13 @@ timezone: Asia/Kolkata
 # Append a short competition tag to each title, e.g. "Arsenal 2–1 Chelsea [PL]"
 show_competition_tag: true
 
-# A colour dot shown beside each club's name, e.g. "🔴 Arsenal 2–1 Chelsea 🔵".
-# Names match loosely, like the teams list above. Any club can have one,
-# including opponents; clubs not listed get no dot. Available dots:
-# 🔴 🟠 🟡 🟢 🔵 🟣 🟤 ⚫ ⚪
+# A colour dot beside every club's name, e.g. "🔴 Arsenal 2–1 Chelsea 🔵".
+# Each club gets its main colour from the API automatically (Arsenal's
+# "Red / White" -> 🔴). The entries below override that, matched loosely like
+# the teams list, so add any club whose automatic dot you don't like.
+# This only affects titles: which matches appear is still set by `teams`.
+# Available dots: 🔴 🟠 🟡 🟢 🔵 🟣 🟤 ⚫ ⚪
+auto_badges: true
 team_badges:
   Arsenal: 🔴
   Chelsea: 🔵

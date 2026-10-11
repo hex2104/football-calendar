@@ -91,10 +91,25 @@ STATUS_RANK = {
 # (e.g. awaiting TV picks); a POSTPONED match's slot is no longer happening.
 TENTATIVE_STATUSES = ("SCHEDULED", "POSTPONED")
 
-# The free tier leaves venue out of match data, so venues come from each
-# club's home ground (the teams endpoint). Stadiums rarely change, so the
-# lookup is published as venues.json and only refreshed this often.
-VENUES_MAX_AGE = dt.timedelta(days=7)
+# The free tier leaves venue out of match data, so each club's home ground
+# and colours come from the teams endpoint instead. They rarely change, so
+# the lookup is published as clubs.json and only refreshed this often.
+CLUBS_MAX_AGE = dt.timedelta(days=7)
+
+# Colour words in the API's clubColors ("Claret / Sky Blue") -> emoji dot.
+# Checked in order, so "sky blue" hits blue before anything else does.
+COLOUR_DOTS = (
+    (("claret", "maroon", "burgundy", "wine", "bordeaux", "purple", "violet",
+      "lilac", "mauve"), "🟣"),
+    (("red", "scarlet", "crimson", "cherry", "garnet", "grenat"), "🔴"),
+    (("orange", "tangerine"), "🟠"),
+    (("yellow", "gold", "amber"), "🟡"),
+    (("green", "emerald", "lime"), "🟢"),
+    (("blue", "navy", "sky", "azure", "cyan", "turquoise", "teal"), "🔵"),
+    (("brown", "chocolate"), "🟤"),
+    (("black",), "⚫"),
+    (("white", "silver", "grey", "gray", "cream"), "⚪"),
+)
 
 # Stages played at a neutral ground, where the home club's stadium is wrong.
 NEUTRAL_STAGES = ("FINAL",)
@@ -306,12 +321,27 @@ def watchlist_report(by_competition: dict[str, list[dict]], watchlist: set[str],
     return warnings
 
 
+def colour_dot(club_colors: str | None) -> str:
+    """Emoji dot for a club's first recognisable colour, e.g. "Red / White" -> 🔴."""
+    for part in str(club_colors or "").lower().split("/"):
+        words = re.findall(r"[a-z]+", part)
+        for names, dot in COLOUR_DOTS:
+            if any(word in names for word in words):
+                return dot
+    return ""
+
+
 def team_badge(team: dict, cfg: dict) -> str:
-    """The configured colour dot for a team, matched like the watchlist."""
+    """
+    The colour dot for a team: a team_badges entry from the config if one
+    matches (loosely, like the watchlist), otherwise the club's own colours.
+    """
     for want, badge in (cfg.get("team_badges") or {}).items():
         want, badge = str(want).strip().lower(), str(badge or "").strip()
         if want and badge and team_matches(team, want):
             return badge
+    if cfg.get("auto_badges", True):
+        return colour_dot(team.get("clubColors"))
     return ""
 
 
@@ -622,13 +652,13 @@ def load_matches(cfg: dict, token: str, offline: str | None) -> dict[str, list[d
     return result
 
 
-def load_venues(cfg: dict, token: str, offline: str | None,
-                previous_raw: str | None) -> dict:
+def load_clubs(cfg: dict, token: str, offline: str | None,
+               previous_raw: str | None) -> dict:
     """
-    Home ground per team id, as published in venues.json.
+    Home ground and colours per team id, as published in clubs.json.
 
     Reuses the previous build's lookup while it is fresh, and never fails the
-    build: venues are a nice-to-have, the fixtures are not.
+    build: venues and colours are a nice-to-have, the fixtures are not.
     """
     season = season_for(cfg)
     previous: dict = {}
@@ -636,13 +666,13 @@ def load_venues(cfg: dict, token: str, offline: str | None,
         try:
             previous = json.loads(previous_raw)
         except ValueError:
-            print("  previous venues.json is not valid JSON, ignoring", file=sys.stderr)
+            print("  previous clubs.json is not valid JSON, ignoring", file=sys.stderr)
     teams = dict(previous.get("teams") or {}) if previous.get("season") == season else {}
 
     fetched_at = previous.get("fetched_at")
     if teams and fetched_at:
         age = dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(fetched_at)
-        if age < VENUES_MAX_AGE:
+        if age < CLUBS_MAX_AGE:
             return {"season": season, "fetched_at": fetched_at, "teams": teams}
     if offline:
         return {"season": season, "fetched_at": fetched_at, "teams": teams}
@@ -650,35 +680,47 @@ def load_venues(cfg: dict, token: str, offline: str | None,
     complete = True
     for code in cfg.get("competitions", []):
         time.sleep(7)  # follows the match requests; stay inside 10/minute
-        print(f"fetching {code} home grounds")
+        print(f"fetching {code} clubs")
         try:
             data = api_get(f"/competitions/{code}/teams?season={season}", token)
         except ApiError as err:
-            print(f"  warning: no venues for {code} ({err})", file=sys.stderr)
+            print(f"  warning: no club details for {code} ({err})", file=sys.stderr)
             complete = False
             continue
         for team in data.get("teams") or []:
-            if team.get("id") and team.get("venue"):
-                teams[str(team["id"])] = team["venue"]
+            if team.get("id"):
+                teams[str(team["id"])] = {"venue": team.get("venue"),
+                                          "clubColors": team.get("clubColors")}
     if complete:
         fetched_at = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     # If any competition failed, keep the old fetched_at so the next build retries.
     return {"season": season, "fetched_at": fetched_at, "teams": teams}
 
 
-def fill_venues(by_competition: dict[str, list[dict]], venues: dict) -> int:
-    """Give each match without a venue its home club's ground. Returns how many."""
-    grounds = venues.get("teams") or {}
-    filled = 0
+def apply_clubs(by_competition: dict[str, list[dict]], clubs: dict) -> tuple[int, int]:
+    """
+    Copy club details onto matches: the home club's ground as the venue
+    (except at neutral-ground stages) and each side's colours for its badge.
+    Returns (venues filled, teams without colours).
+    """
+    known = clubs.get("teams") or {}
+    filled, colourless = 0, set()
     for matches in by_competition.values():
         for match in matches:
+            for side in ("homeTeam", "awayTeam"):
+                team = match.get(side) or {}
+                info = known.get(str(team.get("id"))) or {}
+                if not team.get("clubColors") and info.get("clubColors"):
+                    team["clubColors"] = info["clubColors"]
+                if team.get("id") and not colour_dot(team.get("clubColors")):
+                    colourless.add(team["id"])
             if match.get("venue") or match.get("stage") in NEUTRAL_STAGES:
                 continue
-            ground = grounds.get(str((match.get("homeTeam") or {}).get("id")))
+            ground = (known.get(str((match.get("homeTeam") or {}).get("id"))) or {}).get("venue")
             if ground:
                 match["venue"] = ground
                 filled += 1
-    return filled
+    return filled, len(colourless)
 
 
 def main() -> int:
@@ -753,8 +795,10 @@ def main() -> int:
         for warning in watchlist_report(by_competition, watchlist, only_in):
             print(f"warning: {warning}", file=sys.stderr)
 
-    venues = load_venues(cfg, token, args.offline, read_previous(previous_at, "venues.json"))
-    print(f"venues: {fill_venues(by_competition, venues)} match(es) given their home ground")
+    clubs = load_clubs(cfg, token, args.offline, read_previous(previous_at, "clubs.json"))
+    filled, colourless = apply_clubs(by_competition, clubs)
+    print(f"clubs: {filled} match(es) given their home ground, "
+          f"{colourless} team(s) without known colours")
 
     main_file = cfg.get("filename", "football.ics")
     previous = parse_events(read_previous(previous_at, main_file) or "")
@@ -822,8 +866,8 @@ def main() -> int:
     }
     (outdir / "status.json").write_text(json.dumps(status, indent=2) + "\n", encoding="utf-8")
     # Republished every build: a Pages deploy replaces the whole site.
-    (outdir / "venues.json").write_text(
-        json.dumps(venues, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    (outdir / "clubs.json").write_text(
+        json.dumps(clubs, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
 
     (outdir / ".nojekyll").write_text("", encoding="utf-8")
     return 0

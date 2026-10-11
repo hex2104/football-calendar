@@ -69,9 +69,12 @@ teams:
   - Liverpool
 ```
 
-To put a colour dot beside a club's name in event titles, map it under
-`team_badges` (`Arsenal: 🔴`). Calendar apps can't show real club crests in
-a subscribed feed, so emoji are the closest you can get.
+Every club in an event title gets a colour dot from its main colour, which
+the API provides ("Red / White" → 🔴). Opponents get one too, but which
+matches appear is still decided by `teams`. To change a club's dot, map it
+under `team_badges` (`Arsenal: 🔴`). Set `auto_badges: false` to show dots
+only for the clubs you map. Calendar apps can't show real club crests in a
+subscribed feed, so emoji are the closest you can get.
 
 Each build prints a warning for any name that matches no club, or more than
 one (a bare `Barcelona` also matches Espanyol). Check the build log after
@@ -102,7 +105,7 @@ Per-competition feeds sit alongside it: `premier-league.ics`, `la-liga.ics`,
 `bundesliga.ics`, `champions-league.ics`. Each configured competition always
 gets a file, even when none of your teams play in it, so a subscription never
 breaks. `status.json` records when the feed was last built, and
-`venues.json` caches each club's home ground.
+`clubs.json` caches each club's home ground and colours.
 
 Optionally put that base URL into `config.yaml` as `base_url` and push — the
 next build generates an `index.html` with one-click `webcal://` links.
@@ -167,7 +170,7 @@ push commits to keep them running.
 
 **Venues are the home club's ground.** The free tier leaves the venue out of
 match data, so each event's location is the home team's stadium, taken from
-the API's team list. It's cached in `venues.json` and refreshed weekly, so
+the API's team list. It's cached in `clubs.json` and refreshed weekly, so
 normal builds make no extra API calls. Finals are left blank because they're
 played at neutral grounds. A match moved to a temporary ground will still show
 the club's usual stadium.
